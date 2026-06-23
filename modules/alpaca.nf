@@ -3,32 +3,39 @@ process ALPACA {
     publishDir "${params.pubDir}/${pat}", mode: "copy"
 
     input:
-    tuple val(pat), 
-        path(ci_table), 
-        path(alpaca_input), 
-        path(tree_paths), 
+    tuple val(pat),
+        path(ci_table),
+        path(alpaca_input),
+        path(tree_paths),
         path(cp_table)
 
     output:
-    tuple val(pat), 
+    tuple val(pat),
         path("ALPACA_output_${pat}.csv"),
-        path("cn_change_to_ancestor.csv")
+        path("cn_change_to_ancestor.csv"),
+        emit: results
+    path "*_report.csv", optional: true, emit: reports
+    path "run_gap_summary.csv", optional: true, emit: gap_summary
 
     script:
     """
-    # Create input directory structure
-    mkdir -p ${pat}
-    cp ${alpaca_input} ${pat}/ALPACA_input_table.csv
-    cp ${ci_table} ${pat}/ci_table.csv
-    cp ${cp_table} ${pat}/cp_table.csv
-    cp ${tree_paths} ${pat}/tree_paths.json
-    
-    \$CONDA_PREFIX/bin/python /mnt/storageBig8/work/micoli/miniconda3/envs/alpaca/bin/alpaca run \\
-        --input_tumour_directory ${pat} \\
-        --output_directory ${params.pubDir}/${pat}
+    mkdir -p input_${pat}
+    cp ${alpaca_input} input_${pat}/ALPACA_input_table.csv
+    cp ${ci_table} input_${pat}/ci_table.csv
+    cp ${cp_table} input_${pat}/cp_table.csv
+    cp ${tree_paths} input_${pat}/tree_paths.json
 
-    # Copy outputs back to work directory for Nextflow to track
-    cp ${params.pubDir}/${pat}/ALPACA_output_${pat}.csv .
-    cp ${params.pubDir}/${pat}/cn_change_to_ancestor.csv .
+    alpaca run \\
+        --input_tumour_directory input_${pat} \\
+        --output_directory ./output_${pat} \\
+        --solver gurobi \\
+        --genome_build hg19 \\
+        --extra_columns complexity CI_score D_score
+
+    cp ./output_${pat}/ALPACA_output_${pat}.csv .
+    cp ./output_${pat}/cn_change_to_ancestor.csv .
+    for f in ci_modified_report.csv monoclonal_samples_report.csv run_gap_summary.csv infeasibility_report.csv; do
+        [ -f ./output_${pat}/\$f ] && cp ./output_${pat}/\$f . || true
+    done
     """
 }
