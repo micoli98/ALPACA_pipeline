@@ -19,14 +19,8 @@ process ALPACA {
 
     script:
     """
-    mkdir -p input_${pat}
-    cp ${alpaca_input} input_${pat}/ALPACA_input_table.csv
-    cp ${ci_table} input_${pat}/ci_table.csv
-    cp ${cp_table} input_${pat}/cp_table.csv
-    cp ${tree_paths} input_${pat}/tree_paths.json
-
     alpaca run \\
-        --input_tumour_directory input_${pat} \\
+        --input_tumour_directory . \\
         --output_directory ./output_${pat} \\
         --solver gurobi \\
         --genome_build hg19 \\
