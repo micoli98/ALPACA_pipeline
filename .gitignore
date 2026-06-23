@@ -1,0 +1,5 @@
+work/
+.nextflow/
+.nextflow.log*
+timeline.html
+clones_comparison.rds
