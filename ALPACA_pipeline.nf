@@ -19,8 +19,6 @@ include { CALCULATE_CI} from "./modules/calculate-ci.nf"
 include { ALPACA} from "./modules/alpaca.nf"
 include { GET_STATS } from "./modules/get-stats.nf"
 include { POST_PROCESS } from "./modules/post-process.nf"
-include { CALCULATE_WGD } from "./modules/calculate-wgd.nf"
-include { PLOT_TUMOUR }   from "./modules/plot-tumour.nf"
 
 workflow {
     log.info """\
