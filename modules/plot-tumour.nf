@@ -1,7 +1,6 @@
 process PLOT_TUMOUR {
     tag "${pat}"
     publishDir "${params.pubDir}/${pat}/plots", mode: "copy"
-    conda "/mnt/storageBig8/work/micoli/miniconda3/envs/alpaca"
 
     input:
     tuple val(pat),

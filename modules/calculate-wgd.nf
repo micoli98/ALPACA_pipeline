@@ -1,7 +1,6 @@
 process CALCULATE_WGD {
     tag "${pat}"
     publishDir "${params.pubDir}/${pat}", mode: "copy"
-    conda "/mnt/storageBig8/work/micoli/miniconda3/envs/alpaca"
 
     input:
     tuple val(pat), path(alpaca_output), path(tree_paths)

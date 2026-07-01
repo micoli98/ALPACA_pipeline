@@ -18,7 +18,7 @@ include { REFPHASE} from "./modules/refphase.nf"
 include { CALCULATE_CI} from "./modules/calculate-ci.nf"
 include { ALPACA} from "./modules/alpaca.nf"
 include { GET_STATS } from "./modules/get-stats.nf"
-include { CALCULATE_CCD } from "./modules/calculate-ccd.nf"
+include { POST_PROCESS } from "./modules/post-process.nf"
 include { CALCULATE_WGD } from "./modules/calculate-wgd.nf"
 include { PLOT_TUMOUR }   from "./modules/plot-tumour.nf"
 
@@ -106,35 +106,24 @@ workflow {
     alpaca_input_ch = ci_ch
         .join(cl_info_ch)
     
-    ALPACA(alpaca_input_ch)
-    clones_ch = ALPACA.out.results
+    alpaca_ch = ALPACA(alpaca_input_ch)
 
     // Generate statistics and plots
-    analysis_ch = clones_ch
+    analysis_ch = alpaca_ch
         .join(rp_ch)
         .join(cl_info_ch)
-        .map{ pat, alpaca_out, ancestor_out, rp_segs, rp_snp, rp_pp, tree, cp ->
+        .map{ pat, alpaca_out, ancestor_out, ipynb, rp_segs, rp_snp, rp_pp, tree, cp ->
             tuple(pat, alpaca_out, rp_segs, cp)
         }
 
     GET_STATS(analysis_ch, afun)
 
     // v0.3.1 post-processing
-    CALCULATE_CCD(
-        clones_ch.map{ pat, alpaca_out, ancestor_out -> tuple(pat, alpaca_out) }
-    )
-
-    CALCULATE_WGD(
-        clones_ch
-            .join(cl_info_ch)
-            .map{ pat, alpaca_out, ancestor_out, tree, cp -> tuple(pat, alpaca_out, tree) }
-    )
-
-    PLOT_TUMOUR(
+    POST_PROCESS(
         alpaca_input_ch
-            .join(clones_ch)
-            .map{ pat, ci_table, alpaca_input, tree_paths, cp_table, alpaca_out, ancestor_out ->
-                tuple(pat, ci_table, alpaca_input, tree_paths, cp_table, alpaca_out)
+            .join(alpaca_ch)
+            .map{ pat, ci_table, alpaca_input, tree_paths, cp_table, alpaca_out, ancestor_out, ipynb ->
+                tuple(pat, alpaca_input, tree_paths, cp_table, alpaca_out)
             }
     )
 }
