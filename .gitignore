@@ -4,3 +4,6 @@ work/
 timeline.html
 clones_comparison.rds
 diagram.png
+local.config
+assets/logs/
+*.log

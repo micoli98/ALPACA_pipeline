@@ -1,0 +1,18 @@
+// Copy this file to local.config and fill in your own environment.
+// local.config is gitignored — it will never be committed.
+//
+// Run with:
+//   nextflow run ALPACA_pipeline.nf -c local.config -profile conda --sample_info <path> --pubDir <path>
+
+params {
+  seg               = "/path/to/segmentation_info_final.tsv"
+  pp                = "/path/to/purity_ploidy_estimates.tsv"
+  snp_path          = "/path/to/per_sample_snp_dir/"
+  batch_info        = "/path/to/batch_info.tsv"
+  conversion_table  = "/path/to/sample_names.csv"
+
+  conda_env           = "/path/to/conda/envs/alpaca"
+  gurobi_home         = "/path/to/gurobi/linux64"
+  gurobi_license_file = "/path/to/gurobi.lic"
+  slurm_queue         = "general"
+}

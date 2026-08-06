@@ -1,7 +1,7 @@
 process ALPACA {
     tag "${pat}"
     publishDir "${params.pubDir}/${pat}", mode: "copy"
-    conda "/mnt/storageBig8/work/micoli/miniconda3/envs/alpaca"
+    conda params.conda_env
 
     input:
     tuple val(pat),

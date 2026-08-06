@@ -1,7 +1,7 @@
 process REFPHASE {
     tag "${pat}"
     publishDir "${params.pubDir}/${pat}", mode: "copy"
-    conda "/mnt/storageBig8/work/micoli/miniconda3/envs/alpaca"
+    conda params.conda_env
 
     input: 
     tuple val(pat), 
@@ -17,7 +17,7 @@ process REFPHASE {
 
     script: 
     """
-    #!/mnt/storageBig8/work/micoli/miniconda3/envs/alpaca/bin/Rscript
+    #!/usr/bin/env Rscript
     library(tidyverse)
     library(refphase)
 
