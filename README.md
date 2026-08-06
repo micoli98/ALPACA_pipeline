@@ -69,18 +69,30 @@ GET_STATS                                 POST_PROCESS
 | Tool | Notes |
 |---|---|
 | [Nextflow](https://www.nextflow.io/) | DSL2 |
-| [ALPACA](https://pypi.org/project/alpaca/) Python package | provides the `alpaca` CLI (`run`, `ccd`, `wgd`, `plot-tumour`) |
+| [ALPACA](https://pypi.org/project/alpaca/) Python package | provides the `alpaca` CLI (`run`, `ccd`, `wgd`, `plot-tumour`); academic/non-commercial license |
 | [Gurobi](https://www.gurobi.com/) optimizer | needs a valid license |
-| [RefPhase](https://github.com/amcrabtree/refphase) | R package |
+| [RefPhase](https://bitbucket.org/schwarzlab/refphase) | R package, not on CRAN/conda — installed via `devtools::install_bitbucket()` |
 | conda/mamba | used to provision the environment via Nextflow's `conda` directive |
 | SLURM | or adapt `nextflow.config` for another executor |
 
 ## Setup
 
-1. Create a conda environment with `alpaca`, `refphase`, and their R/Python
-   dependencies installed.
-2. Install Gurobi and obtain a license.
-3. Copy `local.config.example` to `local.config` and fill in the paths for
+1. Create the conda environment from `environment.yml`:
+
+   ```bash
+   conda env create -f environment.yml
+   ```
+
+2. Install RefPhase into that environment (not distributed via conda/CRAN):
+
+   ```bash
+   conda run -n alpaca Rscript -e 'devtools::install_bitbucket("schwarzlab/refphase")'
+   ```
+
+3. Install Gurobi and obtain a license (the `gurobi` conda package installs
+   the Python bindings; you still need a license file, see
+   [gurobi.com](https://www.gurobi.com/downloads/)).
+4. Copy `local.config.example` to `local.config` and fill in the paths for
    your own environment (input data locations, conda env, Gurobi install,
    SLURM queue). `nextflow.config` automatically includes `local.config` if
    it exists, so there's no extra flag needed at run time. `local.config` is

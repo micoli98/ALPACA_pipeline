@@ -1,0 +1,28 @@
+name: alpaca
+channels:
+  - gurobi
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.13
+  - r-base=4.4
+  - r-tidyverse
+  - r-devtools
+  - r-optparse
+  - r-jsonlite
+  - r-reticulate
+  - bioconductor-genomicranges
+  - gurobi
+  - pandas
+  - scipy
+  - tqdm
+  - matplotlib
+  - nbformat
+  - ipykernel
+  - curl
+  - openssl
+  - ca-certificates
+  - pip
+  - pip:
+      - alpaca==0.3.1
