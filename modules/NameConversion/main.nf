@@ -1,10 +1,9 @@
 process NAME_CONVERSION {
     tag "${pat}"
-    publishDir "${params.pubDir}/${pat}", pattern: "*cf_converted.tsv", mode: "copy"
+    publishDir "${params.outdir}/${pat}", pattern: "*cf_converted.tsv", mode: "copy"
 
     input:
     tuple val(pat), path(cf_file)
-    path conv_table
     tuple path(segs),
         path(pp)
 
@@ -19,7 +18,7 @@ process NAME_CONVERSION {
     #!/usr/bin/env Rscript
     library(tidyverse)
 
-    conv_table <- read.table("${conv_table}", sep="\\t", header=T) |>
+    conv_table <- read.table("${params.conversion_table}", sep="\\t", header=T) |>
         select(bamName, platform, id, current)
 
     # Name conversion

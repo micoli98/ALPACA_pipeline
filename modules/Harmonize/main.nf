@@ -1,9 +1,9 @@
 process HARMONIZE {
     tag "${pat}"
-    publishDir "${params.pubDir}/${pat}", mode: "copy" 
-
-    input: 
-    path hfun
+    publishDir "${params.outdir}/${pat}", mode: "copy" 
+    conda params.alpaca_env
+    
+    input:
     tuple val(pat),
         path(segs),
         path(pp),
@@ -23,7 +23,7 @@ process HARMONIZE {
     #!/usr/bin/env Rscript
     library(GenomicRanges)
     library(tidyverse)
-    source("$hfun")
+    source("${params.harmonization_function}")
 
     ### Pt1: Harmonization of CNVs between samples ###
     # From Purple output, derive a similar one to GATK, so all samples get the same number of segments

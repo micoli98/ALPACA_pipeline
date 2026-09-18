@@ -1,13 +1,12 @@
 process GET_STATS {
     tag "${pat}"
-    publishDir "${params.pubDir}/histograms", mode: "copy"
+    publishDir "${params.outdir}/histograms", mode: "copy"
 
     input:
     tuple val(pat), 
         path(a_segs),
         path(h_segs), 
         path(cf)
-    path(afun)
 
     output:
     path("*.png")
@@ -17,7 +16,7 @@ process GET_STATS {
     #!/usr/bin/env Rscript
     library(tidyverse)
     library(rlang)
-    source("$afun")
+    source("${params.clones_comparison_functions}")
 
     # Get refphase segments
     segsH <- read.table("${h_segs}", sep="\\t", header=T) |>

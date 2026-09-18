@@ -1,13 +1,12 @@
 process CALCULATE_CI {
     tag "${pat}"
-    publishDir "${params.pubDir}/${pat}", mode: "copy"
+    publishDir "${params.outdir}/${pat}", mode: "copy"
 
     input: 
     tuple val(pat), 
         path(rp_segs), 
         path(rp_snps), 
         path(rp_pp)
-    path(cfun)
 
     output:
     tuple val(pat), 
@@ -18,7 +17,7 @@ process CALCULATE_CI {
     """
     #!/usr/bin/env Rscript
     library(tidyverse)
-    source("$cfun")
+    source("${params.ci_functions}")
 
     # Load data and correct negative copy number values
     segs <- read.table("${rp_segs}", sep="\\t", header=T) |>

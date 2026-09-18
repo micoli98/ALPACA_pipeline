@@ -1,6 +1,6 @@
 process CLONAL_INFO {
     tag "${pat}"
-    publishDir "${params.pubDir}/${pat}", mode: "copy"
+    publishDir "${params.outdir}/${pat}", mode: "copy"
 
     input: 
     tuple val(pat),
@@ -10,7 +10,6 @@ process CLONAL_INFO {
         path(cf_file),
         path(tree_file),
         path(snp_files)
-    path tfun
 
     output:
     tuple val(pat), 
@@ -21,7 +20,7 @@ process CLONAL_INFO {
     """
     #!/usr/bin/env Rscript
     library(tidyverse)
-    source("$tfun")
+    source("${params.tree_conversion_functions}")
 
     ### Clone proportions table ###
     # Read cellular frequency file

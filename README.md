@@ -1,30 +1,52 @@
-# ALPACA Pipeline
+# ALPACA-SVclone Pipeline
 
 Nextflow DSL2 pipeline for tumor copy-number evolution analysis. Integrates
 Purple CNV calls, [RefPhase](https://github.com/amcrabtree/refphase)
 allele-specific phasing, and the [ALPACA](https://pypi.org/project/alpaca/)
-optimizer to infer clonal copy-number profiles along a phylogenetic tree.
+optimizer to infer clonal copy-number profiles along a phylogenetic tree, and
+runs [SVclone](https://github.com/mcmero/SVclone) to cluster structural
+variants by cancer cell fraction.
 
 ## Repository layout
 
 ```
-ALPACA_pipeline.nf          ← main workflow
-nextflow.config              ← default params, executor, conda, Gurobi env
-local.config.example         ← template for your own environment (copy to local.config)
-modules/                     ← one process per file
-├── name-conversion.nf       ← NAME_CONVERSION
-├── harmonize.nf             ← HARMONIZE
-├── clonal-info.nf           ← CLONAL_INFO
-├── refphase.nf               ← REFPHASE
-├── calculate-ci.nf           ← CALCULATE_CI
-├── alpaca.nf                 ← ALPACA (core solver)
-├── get-stats.nf              ← GET_STATS (R diagnostic plots)
-└── post-process.nf           ← POST_PROCESS (CCD + WGD + plot-tumour)
-assets/                       ← R helper scripts sourced by modules
-old_pipelines/                ← superseded monolithic versions
+main.nf                        ← top-level entrypoint: runs ALPACA_SUBWORKFLOW + SVCLONE_SUBWORKFLOW, joins output by patient
+nextflow.config                ← default params, executor, conda, Gurobi env
+local.config.example           ← template for your own environment (copy to local.config)
+subworkflows/
+├── alpaca.nf                  ← ALPACA_SUBWORKFLOW: clonal copy-number evolution (per patient)
+└── svclone.nf                 ← SVCLONE_SUBWORKFLOW: SV clustering by cancer cell fraction (per sample)
+modules/                       ← one process per directory (modules/<ProcessName>/main.nf)
+├── NameConversion/            ← NAME_CONVERSION
+├── Harmonize/                 ← HARMONIZE
+├── ClonalInfo/                ← CLONAL_INFO
+├── Refphase/                  ← REFPHASE
+├── CalculateCi/               ← CALCULATE_CI
+├── Alpaca/                    ← ALPACA (core solver)
+├── GetStats/                  ← GET_STATS (R diagnostic plots)
+├── PostProcess/               ← POST_PROCESS (CCD + WGD + plot-tumour, v0.3.1)
+├── GetPatientInfo/            ← GET_PATIENT_INFO (currently unused/unwired)
+├── GetInsertStd/              ← GET_INSERT_STD (SVclone)
+├── Config/                    ← CONFIG (SVclone)
+├── FilterSV/                  ← FILTER_SV (SVclone)
+├── Annotation/                ← ANNOTATION (SVclone)
+├── Count/                     ← COUNT (SVclone)
+├── PrepareFilterInput/        ← PREPARE_FILTER_INPUT (SVclone)
+├── Filter/                    ← FILTER (SVclone)
+└── Clustering/                ← CLUSTERING (SVclone)
+assets/                        ← R helper scripts sourced by ALPACA modules
+old_pipelines/                 ← superseded monolithic versions
 ```
 
 ## Pipeline steps
+
+`main.nf` runs both subworkflows over the same cohort (`sample_info`) and
+joins their outputs by patient into one terminal in-memory channel. There is
+no combined `publishDir` for that join — each process publishes its own
+files under `{outdir}/{patient}/` (ALPACA side) or `{outdir}/{sample}/`
+(SVclone side) as it runs.
+
+### ALPACA subworkflow (per patient)
 
 ```
 sample_info TSV + batch_info TSV + Purple output + SNP BAF files
@@ -64,6 +86,46 @@ GET_STATS                                 POST_PROCESS
                                           → {pat}_plots.ipynb
 ```
 
+### SVclone subworkflow (per sample)
+
+```
+sample_info TSV + batch_info TSV + coverage_info TSV + Purple output (seg/pp/SV VCF) + BAM/BAI
+        │
+        ├──────────────────────────────┐
+        ▼                              ▼
+GET_INSERT_STD                    (purity filter: only samples
+→ insert size stdev                above --min_purity proceed)
+        │                              │
+        └──────────────┬───────────────┘
+                        ▼
+                     CONFIG
+                     → svclone_config.ini
+        │
+        ▼
+FILTER_SV
+→ {sample}.purple.breakpoints.vcf
+        │
+        ▼
+ANNOTATION
+→ {sample}_svin.txt, read_params.txt
+        │
+        ▼
+COUNT
+→ {sample}_svinfo.txt
+        │
+        ▼ (joined with PREPARE_FILTER_INPUT output)
+PREPARE_FILTER_INPUT
+→ {sample}_snvs_for_svclone.vcf, {sample}_ascat.csv, {sample}_pp.tsv
+        │
+        ▼
+FILTER
+→ {sample}_filtered_svs.tsv, {sample}_filtered_snvs.tsv, purity_ploidy.txt
+        │
+        ▼
+CLUSTERING
+→ SVclone cluster output files (per sample)
+```
+
 ## Requirements
 
 | Tool | Notes |
@@ -72,15 +134,24 @@ GET_STATS                                 POST_PROCESS
 | [ALPACA](https://pypi.org/project/alpaca/) Python package | provides the `alpaca` CLI (`run`, `ccd`, `wgd`, `plot-tumour`); academic/non-commercial license |
 | [Gurobi](https://www.gurobi.com/) optimizer | needs a valid license |
 | [RefPhase](https://bitbucket.org/schwarzlab/refphase) | R package, not on CRAN/conda — installed via `devtools::install_bitbucket()` |
-| conda/mamba | used to provision the environment via Nextflow's `conda` directive |
+| [SVclone](https://github.com/mcmero/SVclone) | provides the `svclone` CLI (`annotate`, `count`, `filter`, `cluster`); older Python 3.6 environment |
+| conda/mamba | used to provision the environments via Nextflow's `conda` directive |
 | SLURM | or adapt `nextflow.config` for another executor |
 
 ## Setup
 
-1. Create the conda environment from `environment.yml`:
+1. Create the conda environment from `alpaca_environment.yml`:
 
    ```bash
-   conda env create -f environment.yml
+   conda env create -f alpaca_environment.yml
+   ```
+
+   The `ANNOTATION`, `COUNT`, `PREPARE_FILTER_INPUT`, `FILTER` and `CLUSTERING` processes (SVclone
+   subworkflow) run in a separate, older (Python 3.6) environment instead — create it from
+   `svclone_environment.yml`:
+
+   ```bash
+   conda env create -f svclone_environment.yml
    ```
 
 2. Install RefPhase into that environment (not distributed via conda/CRAN):
@@ -93,7 +164,7 @@ GET_STATS                                 POST_PROCESS
    the Python bindings; you still need a license file, see
    [gurobi.com](https://www.gurobi.com/downloads/)).
 4. Copy `local.config.example` to `local.config` and fill in the paths for
-   your own environment (input data locations, conda env, Gurobi install,
+   your own environment (input data locations, conda envs, Gurobi install,
    SLURM queue). `nextflow.config` automatically includes `local.config` if
    it exists, so there's no extra flag needed at run time. `local.config` is
    gitignored so your local paths never get committed.
@@ -105,22 +176,29 @@ GET_STATS                                 POST_PROCESS
 | `--seg` | Purple segmentation TSV |
 | `--pp` | Purple purity/ploidy estimates TSV |
 | `--snp_path` | directory of per-sample SNP BAF files (`{patient}/{sample}.amber.baf.tsv[.gz]`) |
-| `--batch_info` | TSV with columns `patient`, `batch`, `model`, `path_to_trees`, `file_cf`, `file_tree` |
+| `--batch_info` | TSV with columns `patient`, `batch`, `model`, `path_to_trees`, `file_cf`, `file_tree`, `snv_vcf` |
 | `--conversion_table` | sample-name conversion table (CSV) |
 | `--sample_info` | TSV with `sample` and `patient` columns |
-| `--pubDir` | output directory |
+| `--outdir` | output directory |
+| `--bam_dir` | directory of per-sample BAM/BAI files (SVclone) |
+| `--purple_dir` | directory of per-patient Purple SV VCFs (SVclone) |
+| `--coverage_info` | TSV with columns `sample`, `meanCoverage`, `MEAN_READ_LENGTH`, `MEAN_INSERT_SIZE` (SVclone) |
+| `--conversion_script` | R script sourced by `PREPARE_FILTER_INPUT` for mutation-key matching (SVclone) |
+| `--min_purity` | Purple purity threshold below which samples are excluded from SVclone (default `0.1`) |
 
 ## Run command
 
 ```bash
-nextflow run ALPACA_pipeline.nf \
+nextflow run main.nf \
     -resume \
     -profile conda \
     --sample_info /path/to/sample_info.tsv \
-    --pubDir /path/to/output
+    --outdir /path/to/output
 ```
 
-## Output per patient (`{pubDir}/{patient}/`)
+## Output
+
+### Per patient (`{outdir}/{patient}/`) — ALPACA subworkflow
 
 | File | Produced by |
 |---|---|
@@ -140,6 +218,18 @@ nextflow run ALPACA_pipeline.nf \
 | `*_report.csv`, `run_gap_summary.csv` | ALPACA — diagnostic reports |
 | `histograms/*.png` | GET_STATS — RefPhase vs ALPACA comparison plots |
 
+### Per sample (`{outdir}/{sample}/`) — SVclone subworkflow
+
+| File | Produced by |
+|---|---|
+| `svclone_config.ini` | CONFIG — per-sample SVclone configuration |
+| `{sample}.purple.breakpoints.vcf` | FILTER_SV — breakpoint-only SV VCF |
+| `{sample}_svin.txt`, `read_params.txt` | ANNOTATION — annotated SV input / read parameters |
+| `{sample}_svinfo.txt` | COUNT — read-support counts per SV |
+| `{sample}_snvs_for_svclone.vcf`, `{sample}_ascat.csv`, `{sample}_pp.tsv` | PREPARE_FILTER_INPUT — reformatted SNV/CNV/purity-ploidy input |
+| `{sample}_filtered_svs.tsv`, `{sample}_filtered_snvs.tsv`, `purity_ploidy.txt` | FILTER — filtered SVs/SNVs |
+| SVclone cluster output | CLUSTERING (`svclone cluster`) — CCF clusters |
+
 ## Known quirks
 
 - **Chromosome X in segment names**: `alpaca ccd` and `alpaca wgd` require
@@ -154,3 +244,8 @@ nextflow run ALPACA_pipeline.nf \
   your environment, generate plots as Jupyter notebooks
   (`--plot_output_mode notebook`) instead and open the `.ipynb` output
   locally to view interactive figures.
+
+- **Low-purity samples are skipped in SVclone**: `SVCLONE_SUBWORKFLOW` reads
+  Purple purity from `--pp` and drops any sample at or below `--min_purity`
+  (default `0.1`) before `GET_INSERT_STD` runs, so those samples produce no
+  SVclone output.
