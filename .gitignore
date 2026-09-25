@@ -9,3 +9,5 @@ assets/logs/
 *.log
 CLAUDE.md
 .claude/
+.vscode/
+test/
