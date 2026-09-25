@@ -1,6 +1,6 @@
 process POST_PROCESS {
     tag "${pat}"
-    publishDir "${params.outdir}/${pat}", mode: "copy"
+    publishDir "${params.outdir}/${pat}/alpaca", mode: "copy"
 
     input:
     tuple val(pat),

@@ -1,7 +1,7 @@
 process FILTER_SV {
     tag "${sample}"
     conda params.svclone_env
-    publishDir "${params.outdir}/${sample}", mode: "copy"
+    publishDir "${params.outdir}/${patient}/svclone/${sample}", mode: "copy"
 
     input: 
     tuple val(sample),

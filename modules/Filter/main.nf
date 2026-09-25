@@ -1,7 +1,9 @@
 process FILTER {
     tag "${sample}"
-    publishDir "${params.outdir}/${sample}", mode: "copy"
+    publishDir "${params.outdir}/${patient}/svclone/${sample}", mode: "copy"
     conda params.svclone_env
+    // svclone rewrites read_params.txt in place; copy so the upstream work-dir file (and cache hash) stays untouched
+    stageInMode 'copy'
     
     input: 
     tuple val(sample),

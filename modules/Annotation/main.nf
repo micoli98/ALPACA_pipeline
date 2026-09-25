@@ -1,6 +1,6 @@
 process ANNOTATION {
     tag "${sample}"
-    publishDir "${params.outdir}/${sample}", pattern: "*.txt", mode: "copy"
+    publishDir "${params.outdir}/${patient}/svclone/${sample}", pattern: "*.txt", mode: "copy"
     conda params.svclone_env
     errorStrategy 'ignore'
     

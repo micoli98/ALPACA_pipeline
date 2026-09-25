@@ -1,6 +1,6 @@
 process ALPACA {
     tag "${pat}"
-    publishDir "${params.outdir}/${pat}", mode: "copy"
+    publishDir "${params.outdir}/${pat}/alpaca", mode: "copy"
     conda params.alpaca_env
 
     input:

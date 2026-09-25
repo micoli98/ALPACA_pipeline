@@ -1,6 +1,6 @@
 process NAME_CONVERSION {
     tag "${pat}"
-    publishDir "${params.outdir}/${pat}", pattern: "*cf_converted.tsv", mode: "copy"
+    publishDir "${params.outdir}/${pat}/alpaca", pattern: "*cf_converted.tsv", mode: "copy"
 
     input:
     tuple val(pat), path(cf_file)

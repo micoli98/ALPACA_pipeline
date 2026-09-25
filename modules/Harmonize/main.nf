@@ -1,6 +1,6 @@
 process HARMONIZE {
     tag "${pat}"
-    publishDir "${params.outdir}/${pat}", mode: "copy" 
+    publishDir "${params.outdir}/${pat}/alpaca", mode: "copy" 
     conda params.alpaca_env
     
     input:
@@ -97,7 +97,7 @@ process HARMONIZE {
             mutate(
                 chrom = gsub("chr", "", chromosome),
                 pos = position,
-                baf = tumorModifiedBAF,
+                baf = tumorBAF,
                 germline_baf = normalModifiedBAF,
                 logR = log2((tumorDepth + 1) / (normalDepth + 1)),
                 sample_id = sample

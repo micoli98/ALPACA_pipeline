@@ -1,6 +1,6 @@
 process REFPHASE {
     tag "${pat}"
-    publishDir "${params.outdir}/${pat}", mode: "copy"
+    publishDir "${params.outdir}/${pat}/alpaca", mode: "copy"
     conda params.alpaca_env
 
     input: 
@@ -29,7 +29,7 @@ process REFPHASE {
     rp_data <- refphase_load(data_format = "tsv",
                             samples = sample_list,
                             tsv_prefix = "${pat}-")
-    rp_res <- refphase(rp_data)
+    rp_res <- refphase(rp_data, cn_method = "none", phase_all_segs = F)
 
     ## Write output
     write_segs(rp_res\$phased_segs, file = "${pat}-refphase-segmentation.tsv")

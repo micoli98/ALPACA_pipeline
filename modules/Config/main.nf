@@ -1,6 +1,6 @@
 process CONFIG {
     tag "${sample}"
-    publishDir "${params.outdir}/${sample}", pattern: "svclone_config.ini", mode: "copy"
+    publishDir "${params.outdir}/${patient}/svclone/${sample}", pattern: "svclone_config.ini", mode: "copy"
 
     input: 
     tuple val(sample),

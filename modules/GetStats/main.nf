@@ -1,6 +1,6 @@
 process GET_STATS {
     tag "${pat}"
-    publishDir "${params.outdir}/histograms", mode: "copy"
+    publishDir "${params.outdir}/${pat}/alpaca/histograms", mode: "copy"
 
     input:
     tuple val(pat), 

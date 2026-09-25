@@ -1,6 +1,6 @@
 process PREPARE_FILTER_INPUT {
     tag "${sample}"
-    publishDir "${params.outdir}/${sample}", mode: "copy"
+    publishDir "${params.outdir}/${patient}/svclone/${sample}", mode: "copy"
     conda params.svclone_env
     
     input: 
