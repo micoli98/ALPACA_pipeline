@@ -30,16 +30,23 @@ workflow ALPACA_SUBWORKFLOW {
                 error "SNP file not found for ${sample} (patient ${patient})"
             }
 
-            tuple(patient, snp_file)
+            // COBALT read-depth ratios, used for the GC-corrected logR
+            def rd_files = file("${params.snp_path}/${patient}/${sample}.cobalt.ratio.tsv.gz")
+            def rd_file = rd_files instanceof List ? rd_files[0] : rd_files
+            if (!rd_file.exists()) {
+                error "COBALT read-depth file not found for ${sample} (patient ${patient})"
+            }
+
+            tuple(patient, snp_file, rd_file)
         }
         .groupTuple(by:0)
         .join(batch_info_ch)
-        .map{ patient, snp_files, batch, model, path_to_trees, file_cf, file_tree ->
-                tuple(patient, model, file_cf, file_tree, snp_files)
+        .map{ patient, snp_files, rd_files, batch, model, path_to_trees, file_cf, file_tree ->
+                tuple(patient, model, file_cf, file_tree, snp_files, rd_files)
             }
 
     cf_ch = patient_input_ch
-        .map{ patient, model, file_cf, file_tree, snp_files ->
+        .map{ patient, model, file_cf, file_tree, snp_files, rd_files ->
             tuple(patient, file_cf)
         }
 
@@ -49,20 +56,27 @@ workflow ALPACA_SUBWORKFLOW {
     // Rejoin with batch info
     patient_input_conv_ch = converted_cf_ch
         .join(patient_input_ch)
-        .map{ patient, file_cf, segs, pp, model, file_cf_old, file_tree, snp_files ->
-            tuple(patient, segs, pp, model, file_cf, file_tree, snp_files)
+        .map{ patient, file_cf, segs, pp, model, file_cf_old, file_tree, snp_files, rd_files ->
+            tuple(patient, segs, pp, model, file_cf, file_tree, snp_files, rd_files)
         }
-
     rp_input_ch = HARMONIZE(patient_input_conv_ch)
 
-    // Reformat clonal information per patient to adhere to ALPACA requirements
-    cl_info_ch = CLONAL_INFO(patient_input_conv_ch)
+    // Reformat clonal information per patient to adhere to ALPACA requirements (no read-depth files needed)
+    cl_info_ch = CLONAL_INFO(
+        patient_input_conv_ch.map{ patient, segs, pp, model, file_cf, file_tree, snp_files, rd_files ->
+            tuple(patient, segs, pp, model, file_cf, file_tree, snp_files)
+        }
+    )
 
     // Run RefPhase to phase both copy number and snp data
     rp_ch = REFPHASE(rp_input_ch)
 
-    // Confidence interval calculation for copy number segments
-    ci_ch = CALCULATE_CI(rp_ch)
+    // Confidence interval calculation for copy number segments (needs cp_table to keep CONIPHER samples)
+    ci_ch = CALCULATE_CI(
+        rp_ch
+            .join(cl_info_ch)
+            .map{ pat, rp_segs, rp_snps, rp_pp, tree, cp -> tuple(pat, rp_segs, rp_snps, rp_pp, cp) }
+    )
 
     // Run ALPACA
     alpaca_input_ch = ci_ch

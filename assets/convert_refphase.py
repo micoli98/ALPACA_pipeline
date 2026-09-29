@@ -203,14 +203,6 @@ refphase_snps = (
     else None
 )
 
-################################################################################################
-## GIULIA'S STUFF                                                                              #  
-keep = ["8", "17", "19"]                                                                       #
-refphase_segments = refphase_segments[refphase_segments["chr"].astype(str).isin(keep)]         #
-refphase_snps = refphase_snps[refphase_snps["chr"].astype(str).isin(keep)]                     #
-                                                                                               #
-################################################################################################
-
 if "was_cn_updated" not in refphase_segments.columns:
     refphase_segments["was_cn_updated"] = False
 if "is_reference" not in refphase_segments.columns:
@@ -346,18 +338,18 @@ if copy_number_tool == "battenberg_plus":
 else:
     # calculate confidence intervals:
     print(f"Calculating confidence intervals for {tumour_id}")
-    # assign SNPS to segments:
-    snps_with_segments = refphase_snps.merge(
-        refphase_segments,
-        left_on=["sample", "chr"],
-        right_on=["sample", "chr"],
-        how="inner",
+    # assign SNPS to segments: segments don't overlap within a sample/chromosome, so each SNP takes
+    # the last segment starting at or before it. Same result as ALPACA's sample x chr merge + position
+    # filter, without materialising every SNP-segment pair (which exhausts memory on whole genomes).
+    snps_with_segments = pd.merge_asof(
+        refphase_snps.sort_values("pos"),
+        refphase_segments.sort_values("start"),
+        left_on="pos",
+        right_on="start",
+        by=["sample", "chr"],
+        direction="backward",
     )
-
-    snps_with_segments = snps_with_segments[
-        (snps_with_segments["pos"] >= snps_with_segments["start"])
-        & (snps_with_segments["pos"] <= snps_with_segments["end"])
-    ]
+    snps_with_segments = snps_with_segments[snps_with_segments["pos"] <= snps_with_segments["end"]]
     # add purity and ploidy information
     snps_with_segments_purity_ploidy = snps_with_segments.merge(
         refphase_purity_ploidy, left_on="sample", right_on="sample_id", how="inner"

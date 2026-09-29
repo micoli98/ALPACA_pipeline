@@ -10,7 +10,8 @@ process HARMONIZE {
         val(model),
         path(cf_file),
         path(tree_file),
-        path(snp_files)
+        path(snp_files),
+        path(rd_files)
 
     output:
     tuple val(pat), 
@@ -21,8 +22,10 @@ process HARMONIZE {
     script: 
     """
     #!/usr/bin/env Rscript
-    library(GenomicRanges)
-    library(tidyverse)
+    suppressPackageStartupMessages({
+        library(GenomicRanges)
+        library(tidyverse)
+    })
     source("${params.harmonization_function}")
 
     ### Pt1: Harmonization of CNVs between samples ###
@@ -91,19 +94,41 @@ process HARMONIZE {
     sample_names <- sample_names[keep]
     snp_files    <- snp_files[keep] 
 
+    # COBALT read-depth files, named by sample
+    rd_files <- unlist(strsplit("${rd_files}", split = " "))
+    names(rd_files) <- str_remove(basename(rd_files), fixed(".cobalt.ratio.tsv.gz"))
+
+    # GC-corrected logR of the COBALT 1 kb window containing each SNP.
+    # Windows with ratio -1 (masked) or 0 (no coverage) are skipped, so their SNPs get NA.
+    cobalt_logr <- function(snps, rd_file) {
+        rd <- read_tsv(rd_file, show_col_types = F,
+                       col_select = c(chromosome, position, tumorGCRatio, referenceGCDiploidRatio)) |>
+            filter(tumorGCRatio > 0, referenceGCDiploidRatio > 0)
+        windows <- GRanges(gsub("chr", "", rd\$chromosome), IRanges(rd\$position, width = 1000))
+        hits <- findOverlaps(GRanges(snps\$chrom, IRanges(snps\$pos, width = 1)), windows, select = "first")
+        log2(rd\$tumorGCRatio / rd\$referenceGCDiploidRatio)[hits]
+    }
+
     # Read and process all files at once
     snps_all <- map2_dfr(snp_files, sample_names, function(file, sample) {
-        read_tsv(file, show_col_types = F) |>
-            mutate(
+        snps <- read_tsv(file, show_col_types = F) |>
+            transmute(
                 chrom = gsub("chr", "", chromosome),
                 pos = position,
                 baf = tumorBAF,
                 germline_baf = normalModifiedBAF,
-                logR = log2((tumorDepth + 1) / (normalDepth + 1)),
                 sample_id = sample
-            ) |>
-            select(chrom, pos, baf, germline_baf, logR, sample_id)
+            )
+        snps\$logR <- cobalt_logr(snps, rd_files[[sample]])
+        select(snps, chrom, pos, baf, germline_baf, logR, sample_id)
     })
+
+    # RefPhase's validate_snps() rejects NA logR: drop SNPs in masked COBALT windows
+    snps_all |>
+        group_by(sample_id) |>
+        summarise(pct_dropped = round(100 * mean(is.na(logR)), 2)) |>
+        print()
+    snps_all <- filter(snps_all, !is.na(logR))
 
     # Save output
     write.table(snps_all, "${pat}-snps.tsv", sep="\\t", quote=FALSE, row.names=FALSE)
