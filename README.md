@@ -34,7 +34,7 @@ modules/                       ← one process per directory (modules/<ProcessNa
 ├── PrepareFilterInput/        ← PREPARE_FILTER_INPUT (SVclone)
 ├── Filter/                    ← FILTER (SVclone)
 └── Clustering/                ← CLUSTERING (SVclone)
-assets/                        ← R helper scripts sourced by ALPACA modules
+assets/                        ← R helper scripts sourced by ALPACA modules + convert_refphase.py (CALCULATE_CI)
 old_pipelines/                 ← superseded monolithic versions
 ```
 
@@ -43,13 +43,13 @@ old_pipelines/                 ← superseded monolithic versions
 `main.nf` runs both subworkflows over the same cohort (`sample_info`) and
 joins their outputs by patient into one terminal in-memory channel. There is
 no combined `publishDir` for that join — each process publishes its own
-files under `{outdir}/{patient}/` (ALPACA side) or `{outdir}/{sample}/`
-(SVclone side) as it runs.
+files under `{outdir}/{patient}/alpaca/` (ALPACA side) or
+`{outdir}/{patient}/svclone/{sample}/` (SVclone side) as it runs.
 
 ### ALPACA subworkflow (per patient)
 
 ```
-sample_info TSV + batch_info TSV + Purple output + SNP BAF files
+sample_info TSV + batch_info TSV + Purple output + AMBER BAF + COBALT ratio files
         │
         ▼
 NAME_CONVERSION   → {pat}_cf_converted.tsv, _segments_converted.tsv, _purity_ploidy_converted.tsv
@@ -62,13 +62,13 @@ HARMONIZE                 CLONAL_INFO
 → {pat}-purity_ploidy.tsv
         │
         ▼
-REFPHASE
+REFPHASE  (cn_method = "none", phase_all_segs = FALSE)
 → {pat}-refphase-segmentation.tsv
 → {pat}-refphase-phased-snps.tsv.gz
 → {pat}-refphase-sample-data-updated.tsv
         │
         ▼
-CALCULATE_CI
+CALCULATE_CI  (bootstrap CIs, assets/convert_refphase.py; needs cp_table.csv)
 → ci_table.csv
 → ALPACA_input_table.csv
         │
@@ -85,6 +85,28 @@ GET_STATS                                 POST_PROCESS
                                           → wgd_ratio_scores.csv
                                           → {pat}_plots.ipynb
 ```
+
+Notes on the copy-number inputs:
+
+- **BAF** — `HARMONIZE` takes the raw AMBER `tumorBAF` column (not
+  `tumorModifiedBAF`, which AMBER folds to ≥ 0.5 and so carries no phase
+  information). Together with `cn_method = "none"` this fixed the ploidy
+  inflation seen in earlier runs.
+- **logR** — GC-corrected logR from COBALT:
+  `log2(tumorGCRatio / referenceGCDiploidRatio)` of the 1 kb COBALT window
+  containing each SNP. SNPs in masked (`-1`) or zero-coverage windows get no
+  logR and are dropped (RefPhase rejects NA logR); the percentage dropped per
+  sample is printed in the task log.
+- **RefPhase** runs with `cn_method = "none"`, so Purple's allele-specific
+  copy numbers are phased but not re-estimated.
+- **Confidence intervals** — `CALCULATE_CI` runs ALPACA's RefPhase converter
+  (`assets/convert_refphase.py`, a wrapper around ALPACA's
+  `convert_refphase_output` functions): for each segment × sample, SNPs are
+  resampled 1000 times (`--n_bootstrap`) and the 95% CI of the ASCAT copy
+  number from phased BAF + logR is taken, centred on the RefPhase copy
+  number. `--heterozygous_SNPs_threshold 0` keeps every segment; segments
+  with ≤ 10 het SNPs, no SNPs, or no usable logR get a fixed CI span of 0.5.
+  Only samples present in CONIPHER's `cp_table.csv` are kept.
 
 ### SVclone subworkflow (per sample)
 
@@ -175,7 +197,7 @@ CLUSTERING
 |---|---|
 | `--seg` | Purple segmentation TSV |
 | `--pp` | Purple purity/ploidy estimates TSV |
-| `--snp_path` | directory of per-sample SNP BAF files (`{patient}/{sample}.amber.baf.tsv[.gz]`) |
+| `--snp_path` | directory of per-sample AMBER BAF and COBALT ratio files (`{patient}/{sample}.amber.baf.tsv[.gz]`, `{patient}/{sample}.cobalt.ratio.tsv.gz`) |
 | `--batch_info` | TSV with columns `patient`, `batch`, `model`, `path_to_trees`, `file_cf`, `file_tree`, `snv_vcf` |
 | `--conversion_table` | sample-name conversion table (CSV) |
 | `--sample_info` | TSV with `sample` and `patient` columns |
@@ -198,18 +220,18 @@ nextflow run main.nf \
 
 ## Output
 
-### Per patient (`{outdir}/{patient}/`) — ALPACA subworkflow
+### Per patient (`{outdir}/{patient}/alpaca/`) — ALPACA subworkflow
 
 | File | Produced by |
 |---|---|
 | `ALPACA_output_{pat}.csv` | ALPACA — predicted CN per clone per segment |
 | `cn_change_to_ancestor.csv` | ALPACA — CN changes along tree edges |
-| `ci_table.csv` | CALCULATE_CI — confidence intervals per segment |
+| `ci_table.csv` | CALCULATE_CI — bootstrap confidence intervals per segment and sample |
 | `ALPACA_input_table.csv` | CALCULATE_CI — reformatted CN table for ALPACA |
 | `cp_table.csv` | CLONAL_INFO — clone proportions per sample |
 | `tree_paths.json` | CLONAL_INFO — phylogenetic tree paths |
 | `{pat}-segments.tsv` | HARMONIZE — unified CN segments |
-| `{pat}-snps.tsv` | HARMONIZE — BAF/logR SNP data |
+| `{pat}-snps.tsv` | HARMONIZE — AMBER BAF + COBALT logR per SNP |
 | `{pat}-purity_ploidy.tsv` | HARMONIZE — purity/ploidy per sample |
 | `{pat}-refphase-*.tsv(.gz)` | REFPHASE — phased allele-specific CN |
 | `clone_copy_number_diversity_scores.csv` | POST_PROCESS (`alpaca ccd`) |
@@ -218,7 +240,7 @@ nextflow run main.nf \
 | `*_report.csv`, `run_gap_summary.csv` | ALPACA — diagnostic reports |
 | `histograms/*.png` | GET_STATS — RefPhase vs ALPACA comparison plots |
 
-### Per sample (`{outdir}/{sample}/`) — SVclone subworkflow
+### Per sample (`{outdir}/{patient}/svclone/{sample}/`) — SVclone subworkflow
 
 | File | Produced by |
 |---|---|
@@ -249,3 +271,8 @@ nextflow run main.nf \
   Purple purity from `--pp` and drops any sample at or below `--min_purity`
   (default `0.1`) before `GET_INSERT_STD` runs, so those samples produce no
   SVclone output.
+
+- **`CALCULATE_CI` is slow**: ALPACA's bootstrap is a pandas loop (1000
+  resamples per segment × sample, single core). Whole-genome patients with
+  ~16k segment×sample groups take 1–15 h per patient; the process is given
+  `time = '48h'` and `memory = 32.GB` in `nextflow.config`.
