@@ -147,8 +147,8 @@ process PREPARE_FILTER_INPUT {
         end = cnv\$end,
         normal_total = 2,
         normal_minor = 1,
-        tumour_total = cnv\$copyNumber,
-        tumour_minor = cnv\$minorAlleleCopyNumber,
+        tumour_total = pmax(0, round(cnv\$copyNumber)),
+        tumour_minor = pmax(0, round(cnv\$minorAlleleCopyNumber)),
         check.names = FALSE
         )
 

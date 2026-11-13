@@ -17,7 +17,7 @@ process FILTER {
 
     output:
     tuple val(sample),
-        path("${sample}_filtered_svs.tsv"),
+        path("${sample}_filtered_tailored_svs.tsv"),
         path("${sample}_filtered_snvs.tsv"),
         path("purity_ploidy.txt")
 
@@ -33,5 +33,12 @@ process FILTER {
         -p "${pp}" \
         --snvs "${snv}" \
         --snv_format mutect
+
+    Rscript -e '
+    suppressPackageStartupMessages(library(tidyverse))
+    svinfo <- read_tsv("${sample}_filtered_svs.tsv", col_types = cols(.default = "c"), na = character()) |>
+        filter(as.numeric(split1) + as.numeric(split2) >= 1 | as.numeric(spanning) >= 1) |>
+        write_tsv("${sample}_filtered_tailored_svs.tsv", na = "")
+    '
     """
 }

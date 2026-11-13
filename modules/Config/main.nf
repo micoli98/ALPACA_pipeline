@@ -24,7 +24,10 @@ process CONFIG {
         sed 's/insert_std: -1/insert_std: ${insertStd}/' | \\
         sed 's/mean_cov: 50/mean_cov: ${meanCov}/' | \\
         sed 's/max_cn: 10/max_cn: 100/' | \\
+        sed 's/size_filter: -1/size_filter: 300/' | \\
         sed 's/min_dep: 8/min_dep: 4/' | \\
+        sed 's/min_span: 1/min_span: 0/' | \\
+        sed 's/min_split: 1/min_split: 0/' | \\
         sed 's/filter_chroms: False/filter_chroms: True/' | \\
         sed 's/support_adjust_factor: 0/support_adjust_factor: 0.2/' | \\
         sed 's/repeat: 5/repeat: 10/' | \\
